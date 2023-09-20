@@ -39,7 +39,63 @@
 #define ACK 7
 #define SYN 10
 #define FIN 11
+int hexCharToDecimal(char hexChar) {
+    if (hexChar >= '0' && hexChar <= '9') {
+        return hexChar - '0';
+    } else if (hexChar >= 'A' && hexChar <= 'F') {
+        return hexChar - 'A' + 10;
+    } else if (hexChar >= 'a' && hexChar <= 'f') {
+        return hexChar - 'a' + 10;
+    } else {
+        // Invalid character
+        return -1;
+    }
+}
 
+int hexStringToDecimal(const char* hexString) {
+    int length = strlen(hexString);
+    int decimalValue = 0;
+
+    for (int i = length - 1, position = 0; i >= 0; i--, position++) {
+        int digitValue = hexCharToDecimal(hexString[i]);
+        if (digitValue == -1) {
+            printf("Invalid hexadecimal character: %c\n", hexString[i]);
+            return -1;
+        }
+        decimalValue += digitValue * pow(16, position);
+    }
+
+    return decimalValue;
+}
+// function to convert hexadecimal to Decimal Number
+int hexToDecimal(int hexadecimal) {
+    int decimal = 0;
+    int base = 1;
+
+    while (hexadecimal > 0) {
+        int remainder = hexadecimal % 10;
+        decimal += remainder * base;
+        base *= 16;
+        hexadecimal /= 10;
+    }
+
+    return decimal;
+}
+
+// function to convert Decimal to Hexadecimal to decimal Number
+int decimalToHexadecimal(int decimalNumber) {
+    int hexadecimalNumber = 0;
+    int base = 1;
+
+    while (decimalNumber > 0) {
+        int remainder = decimalNumber % 16;
+        hexadecimalNumber += remainder * base;
+        base *= 10;
+        decimalNumber /= 16;
+    }
+
+    return hexadecimalNumber;
+}
 
 // function to convert Hexadecimal to Binary Number
 char* HexToBin(char* hexdec)
@@ -242,9 +298,46 @@ void my(char *in_filename){
     unsigned int src_ip_1st_digit, src_ip_2nd_digit, src_ip_3rd_digit, src_ip_4th_digit;
     unsigned int dst_ip_1st_digit, dst_ip_2nd_digit, dst_ip_3rd_digit, dst_ip_4th_digit;
 
-    unsigned int src_ip_1st_digit_FIN, src_ip_2nd_digit_FIN, src_ip_3rd_digit_FIN, src_ip_4th_digit_FIN;
-    unsigned int dst_ip_1st_digit_FIN, dst_ip_2nd_digit_FIN, dst_ip_3rd_digit_FIN, dst_ip_4th_digit_FIN;
+    unsigned int src_ip[4] = {0,0,0,0};
+    unsigned int dst_ip[4] = {0,0,0,0};
 
+    unsigned int src_ip_FIN[4] = {0,0,0,0}; 
+    unsigned int dst_ip_FIN[4] = {0,0,0,0}; 
+
+    unsigned int src_ip_each[4] = {0,0,0,0};
+    unsigned int dst_ip_each[4] = {0,0,0,0};
+
+
+    int session_source_ip[140];
+    int session_destination_ip[140];
+
+
+    int src_port_num = 0;
+    int dst_port_num = 0;
+
+    int src_port_num_FIN = 0;
+    int dst_port_num_FIN = 0;
+
+    int src_port_num_each = 0;
+    int dst_port_num_each = 0;
+
+    int session_id = 0;
+    int total_tcp_header_len = 0;
+    int total_ip_header_len = 0;
+    int tcp_header_len=0;
+    int ip_header_len=0;
+    int num_packet_each_session[35];
+    double session_duration_each_session[35];
+    int totalIPTrafficByteSent[35];
+    int totalUserTrafficByteSent[35];
+    int source_ports[35];
+    int destination_ports[35];
+    
+
+
+    for(int m=0;m<36;m++){
+        num_packet_each_session[m]=0;
+    }
 
 	if (fd < 0) {
         perror("Unable to open input file");
@@ -256,15 +349,17 @@ void my(char *in_filename){
         perror("File header Error");
         exit(1);
     }
-    int i =0;
+    
     int k= 0;
-
-    int src_port_num = 0;
-    int dst_port_num = 0;
-
+    int total_len = 0;
+    int SYN_FLAG =0;
+    int fini=0;
+    int i =0;
+    int length_IP[2] = {0, 0};
     while (!feof(fd))
     {
-        i+=1;
+        
+        unsigned int len = 0;
         // read the file header, 4x6 bytes
         fread(pkt_header, sizeof(unsigned int), 4, fd);
 
@@ -274,31 +369,55 @@ void my(char *in_filename){
         fread(&one_pkt[0], sizeof(unsigned char), captured_len, fd);
         
         if((unsigned int)one_pkt[ETHER_PROTOCOL_TYPE_LOC] == (unsigned int)8 & (unsigned int)one_pkt[ETHER_PROTOCOL_TYPE_LOC+1]==0){
+            int temp = 0;
 
             // check if the packet is TCP packet
             if (one_pkt[TCP_TYPE_LOC]==TCP_TYPE_NUM){
-                // printf("this is a tcp packet %u \n", captured_len);
-                // printf("%d", i);
+                tcp_header_len = (unsigned int)one_pkt[46];
+                tcp_header_len = 4*(int) decimalToHexadecimal(tcp_header_len)/10;
+
+                ip_header_len =(unsigned)one_pkt[14];
+                ip_header_len = 4*((int)decimalToHexadecimal(ip_header_len)%10);
                 
-                // char flag_hex = one_pkt[47];
-                
+                int check = 0;
+                length_IP[0] = (unsigned int)one_pkt[16];
+                length_IP[1] = (unsigned int)one_pkt[17];
+                length_IP[0] = length_IP[0]<<8;
+                length_IP[0]+=length_IP[1];
+                len = length_IP[0];
+    
                 int binarySize;
                 int* FLAGS_in_binary = decimalToBinary(one_pkt[47], &binarySize);
-                // char FLAGS[13] = "0";
-                // check if this packet is SYN
-                if (FLAGS_in_binary[SYN]==1){
-                    // I need to get the source/destination IP ADDRESSES and the source/destination PORT so that I can check them with the FIN packet and if they are
-                    // same, this concludes one TCP session
+                
+                src_ip_each[0] = (unsigned int)one_pkt[26];
+                src_ip_each[1] = (unsigned int)one_pkt[27];
+                src_ip_each[2] = (unsigned int)one_pkt[28];
+                src_ip_each[3] = (unsigned int)one_pkt[29];
+                dst_ip_each[0] = (unsigned int)one_pkt[30];
+                dst_ip_each[1]=  (unsigned int)one_pkt[31];
+                dst_ip_each[2] = (unsigned int)one_pkt[32];
+                dst_ip_each[3] = (unsigned int)one_pkt[33];
 
-                    // This is me calculating source/destination IP addresses
-                    src_ip_1st_digit = (unsigned int)one_pkt[26];
-                    src_ip_2nd_digit = (unsigned int)one_pkt[27];
-                    src_ip_3rd_digit = (unsigned int)one_pkt[28];
-                    src_ip_4th_digit = (unsigned int)one_pkt[29];
-                    dst_ip_1st_digit = (unsigned int)one_pkt[30];
-                    dst_ip_2nd_digit = (unsigned int)one_pkt[31];
-                    dst_ip_3rd_digit = (unsigned int)one_pkt[32];
-                    dst_ip_4th_digit = (unsigned int)one_pkt[33];
+
+                // THis is me calculating source/destination PORTS
+                src_port_num_each = (unsigned int)one_pkt[TCP_SRC_PORT];
+                src_port_num_each = src_port_num_each << 8;
+                src_port_num_each += (unsigned int)one_pkt[TCP_SRC_PORT+1];
+                dst_port_num_each = (unsigned int)one_pkt[TCP_DST_PORT];
+                dst_port_num_each = dst_port_num_each << 8;
+                dst_port_num_each += (unsigned int)one_pkt[TCP_DST_PORT+1];
+
+                // check if this packet is SYN
+                if (FLAGS_in_binary[SYN]==1){  
+
+                    src_ip[0] = (unsigned int)one_pkt[26];
+                    src_ip[1] = (unsigned int)one_pkt[27];
+                    src_ip[2] = (unsigned int)one_pkt[28];
+                    src_ip[3] = (unsigned int)one_pkt[29];
+                    dst_ip[0] = (unsigned int)one_pkt[30];
+                    dst_ip[1] = (unsigned int)one_pkt[31];
+                    dst_ip[2] = (unsigned int)one_pkt[32];
+                    dst_ip[3] = (unsigned int)one_pkt[33];
 
 
                     // THis is me calculating source/destination PORTS
@@ -308,57 +427,128 @@ void my(char *in_filename){
                     dst_port_num = (unsigned int)one_pkt[TCP_DST_PORT];
                     dst_port_num = dst_port_num << 8;
                     dst_port_num += (unsigned int)one_pkt[TCP_DST_PORT+1];
-                    printf("%d \n", src_port_num);
-                    // break;
-
-
-
-                    k+=1;
-                    printf("this is a syn packet ");
-
-                    session_start_time = (double)pkt_header[0] + (((double)pkt_header[1]) / 1000000);
-                    printf("%f \n", session_start_time);
-                    if(k==2){
-                            break;
+                    
+                    if (src_port_num!=80){
+                        continue;
                     }
-                    
-                    
-                    // break;
+                        i+=1;
+                        session_start_time = (double)pkt_header[0] + (((double)pkt_header[1]) / 1000000);
+                        total_tcp_header_len+=tcp_header_len;
+                        total_ip_header_len+=ip_header_len;
+                        total_len+=len;
                 }
-
+                
                 else if(FLAGS_in_binary[FIN]){
+                    // printf("%d\n", src_port_num_each);                        
+                    src_ip_FIN[0] = (unsigned int)one_pkt[26];
+                    src_ip_FIN[1] = (unsigned int)one_pkt[27];
+                    src_ip_FIN[2] = (unsigned int)one_pkt[28];
+                    src_ip_FIN[3] = (unsigned int)one_pkt[29];
+                    dst_ip_FIN[0] = (unsigned int)one_pkt[30];
+                    dst_ip_FIN[1] = (unsigned int)one_pkt[31];
+                    dst_ip_FIN[2] = (unsigned int)one_pkt[32];
+                    dst_ip_FIN[3] = (unsigned int)one_pkt[33];
 
-                    src_ip_1st_digit_FIN = (unsigned int)one_pkt[26];
-                    src_ip_2nd_digit_FIN = (unsigned int)one_pkt[27];
-                    src_ip_3rd_digit_FIN = (unsigned int)one_pkt[28];
-                    src_ip_4th_digit_FIN= (unsigned int)one_pkt[29];
-                    dst_ip_1st_digit_FIN= (unsigned int)one_pkt[30];
-                    dst_ip_2nd_digit_FIN = (unsigned int)one_pkt[31];
-                    dst_ip_3rd_digit_FIN = (unsigned int)one_pkt[32];
-                    dst_ip_4th_digit_FIN = (unsigned int)one_pkt[33];
+
+                    src_port_num_FIN = (unsigned int)one_pkt[TCP_SRC_PORT];
+                    src_port_num_FIN = src_port_num_FIN << 8;
+                    src_port_num_FIN += (unsigned int)one_pkt[TCP_SRC_PORT+1];
+                    dst_port_num_FIN = (unsigned int)one_pkt[TCP_DST_PORT];
+                    dst_port_num_FIN = dst_port_num_FIN << 8;
+                    dst_port_num_FIN += (unsigned int)one_pkt[TCP_DST_PORT+1];
                     
+                   
+                    // check if the fin packet is of the same source ip and destination ip
+                    
+                    if ((src_ip_FIN[0]==src_ip[0]) && (src_ip_FIN[1]==src_ip[1]) && (src_ip_FIN[2] == src_ip[2])
+                    && ( src_ip_FIN[3] == src_ip[3])
+                    && (dst_ip_FIN[0] ==dst_ip[0]) && (dst_ip_FIN[1]==dst_ip[1]) && (dst_ip_FIN[2] == dst_ip[2])
+                    && ( dst_ip_FIN[3] == dst_ip[3])
+                    && (src_port_num==src_port_num_FIN) && (dst_port_num==dst_port_num_FIN)){
 
-                    session_end_time = (double)pkt_header[0] + (((double)pkt_header[1]) / 1000000);
-                    session_duration = session_end_time-session_start_time
+                        i+=1;
+                        session_end_time = (double)pkt_header[0] + (((double)pkt_header[1]) / 1000000);
+                        session_duration = session_end_time-session_start_time;
+                        total_tcp_header_len+=tcp_header_len;
+                        total_ip_header_len+=ip_header_len;
 
-                    printf("This is a fin packet");
-                    printf("%d",i);;
-                    break;
+                        total_len+=len;
+                        
+                        session_source_ip[4*session_id+0]= src_ip_FIN[0];
+                        session_source_ip[4*session_id+1]= src_ip_FIN[1];
+                        session_source_ip[4*session_id+2]= src_ip_FIN[2];
+                        session_source_ip[4*session_id+3]= src_ip_FIN[3];
+                        
+                        session_destination_ip[4*session_id+0]= dst_ip_FIN[0];
+                        session_destination_ip[4*session_id+1]= dst_ip_FIN[1];
+                        session_destination_ip[4*session_id+2]= dst_ip_FIN[2];
+                        session_destination_ip[4*session_id+3]= dst_ip_FIN[3];
+
+
+                        totalUserTrafficByteSent[session_id] = total_len-(total_ip_header_len+total_tcp_header_len);
+                        source_ports[session_id]=src_port_num;
+                        destination_ports[session_id] = dst_port_num;
+                        num_packet_each_session[session_id] = i;
+                        session_duration_each_session[session_id] = session_duration;
+                        totalIPTrafficByteSent[session_id] = total_len;
+                        session_id+=1;
+
+                        total_len=0;
+                        total_ip_header_len=0;
+                        total_tcp_header_len=0;
+                        i=0;
+                    } 
+
                 }
 
                 // if none of the above I need to do the calculations
-
-                
-                
-
+                else{
+                    if(src_ip[0]==src_ip_each[0] && src_ip[1]== src_ip_each[1] && src_ip[2] ==src_ip_each[2]
+                    && src_ip[3]==src_ip_each[3]){
+                    
+                        i+=1;
+                        total_tcp_header_len+=tcp_header_len;
+                        total_ip_header_len+=ip_header_len;
+                        total_len+=len;
+                    }
+                }
             }
         }
+
     }
+
+
+        // I will be printing all the information on my file now
+        FILE *result;
+        result =fopen("hello.txt", "w");
+        if (result == NULL) {
+                printf("The file is not opened. The program will "
+                    "now exit.");
+                exit(0);
+            }
+        fprintf(result,"%s", "TCP Session Count,  ServerIP,  clientIP,  serverPort,  clientPort,  num_of_packetSent(server->client), TotalIPTrafficBytesSent(server->client),  TotalUserTrafficBytesSent(server->client),  sessionDuration,  bits/s_IPlayerthroughput(server->client),  bits/s_Goodput(server->client)\n");
+        fprintf(result, "%s", "===============================================================================================================================================================\n");
+        for(int index = 0;index<32;index++)
+        {
+
+            fprintf(result, "%d \t %d.%d.%d.%d \t %d.%d.%d.%d \t %d \t %d \t %d \t %d \t %d \t %0.3f \t %0.3f \t %0.3f\n", index+1, session_source_ip[4*index], session_source_ip[4*index+1],
+             session_source_ip[4*index+2], session_source_ip[4*index+3], session_destination_ip[4*index], session_destination_ip[4*index+1],
+             session_destination_ip[4*index+2], session_destination_ip[4*index+3], source_ports[index], destination_ports[index], 
+             num_packet_each_session[index], totalIPTrafficByteSent[index], totalUserTrafficByteSent[index], session_duration_each_session[index],
+             (8*totalIPTrafficByteSent[index])/session_duration_each_session[index],(8*totalUserTrafficByteSent[index])/session_duration_each_session[index] );
+
+
+        }
+
+
+
+
+    
 
 
 
         
-
+    
 
 
 
@@ -379,6 +569,6 @@ void my(char *in_filename){
 
 
 int main(){
-    my("/Users/aakashagarwal/Wireless Communication/cs549/Project/lengthFixed.pcap");
+    my("G:/Wireless Communication/cs549/project1/lengthFixed.pcap");
     return(0);
 }
