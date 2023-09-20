@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "pcap.h": "c",
+        "stdio.h": "c",
+        "math.h": "c",
+        "types.h": "c",
+        "stdlib.h": "c",
+        "time.h": "c",
+        "string.h": "c",
+        "type_traits": "c"
+    }
+}
